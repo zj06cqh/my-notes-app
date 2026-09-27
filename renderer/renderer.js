@@ -1,22 +1,33 @@
 const noteList = document.getElementById('note-list');
 const noteName = document.getElementById('note-name');
 const editor = document.getElementById('editor');
+const preview = document.getElementById('preview');
 const newBtn = document.getElementById('new-note');
 const saveBtn = document.getElementById('save-note');
 
-let currentNote = null; // 当前正在编辑的笔记名（不含扩展名）
+let currentNote = null;      // 当前正在编辑的笔记名（不含扩展名）
+let lastSavedContent = '';   // 当前笔记已写盘的内容，用于判断是否有变化
 
 // 刷新左侧列表
 async function refreshList() {
   const notes = await window.notesAPI.list();
   noteList.innerHTML = '';
 
-  notes.forEach((name) => {
+  notes.forEach((note) => {
     const li = document.createElement('li');
 
     const title = document.createElement('span');
     title.className = 'note-title';
-    title.textContent = name;
+    title.textContent = note.name;
+
+    const imp = document.createElement('button');
+    imp.className = 'note-importance' + (note.importance > 0 ? ` note-importance-${note.importance}` : '');
+    imp.textContent = note.importance > 0 ? String(note.importance) : '·';
+    imp.title = '重要程度（点击修改 1-5）';
+    imp.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cycleImportance(note.name, note.importance);
+    });
 
     const delBtn = document.createElement('button');
     delBtn.className = 'note-delete';
@@ -24,26 +35,31 @@ async function refreshList() {
     delBtn.title = '删除笔记';
     delBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      deleteNote(name);
+      deleteNote(note.name);
     });
 
     li.appendChild(title);
+    li.appendChild(imp);
     li.appendChild(delBtn);
-    li.addEventListener('click', () => openNote(name));
+    li.addEventListener('click', () => openNote(note.name));
     noteList.appendChild(li);
   });
 }
 
 // 打开某篇笔记
 async function openNote(name) {
+  await flushSave(); // 切换笔记前，先强制保存当前笔记（不等防抖）
   currentNote = name;
   noteName.value = name;
   editor.value = await window.notesAPI.read(name);
+  lastSavedContent = editor.value; // 刚读到的内容即已写盘内容
+  renderPreview();
 }
 
 // 保存核心逻辑：写文件并刷新列表（手动保存与自动保存共用）
 async function doSave(name, content) {
   currentNote = await window.notesAPI.save(name, content);
+  lastSavedContent = content; // 记录已写盘内容，供「无变化不重复写」判断
   await refreshList();
 }
 
@@ -72,10 +88,21 @@ async function deleteNote(name) {
   await refreshList();
 }
 
-newBtn.addEventListener('click', () => {
+// 点击重要程度徽标：循环 1 → 2 → ... → 5 → 1
+async function cycleImportance(name, current) {
+  const next = current >= 5 ? 1 : current + 1;
+  await window.notesAPI.setImportance(name, next);
+  await refreshList();
+  showToast(`重要度已设为 ${next}`, 1000);
+}
+
+newBtn.addEventListener('click', async () => {
+  await flushSave(); // 新建前先保存当前笔记
   currentNote = null;
   noteName.value = '';
   editor.value = '';
+  lastSavedContent = '';
+  renderPreview();
   noteName.focus();
 });
 
@@ -89,33 +116,61 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ---- 自动保存 ----
+// ---- 自动保存（静默，无任何提示） ----
 const toast = document.getElementById('toast');
 let saveTimer = null;
 let toastTimer = null;
 
-// 右上角轻提示
-function showToast(msg) {
+// 轻提示（仅重要程度按钮等交互反馈使用，自动保存不再调用）
+function showToast(msg, duration = 1500) {
   toast.textContent = msg;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
-// 自动保存：仅对已保存过的笔记生效，只保存内容、不涉及改名
-async function autoSave() {
+// 有变化才真正写盘；没变化则跳过（自动保存与三处强制保存共用）
+async function flushSave() {
   if (!currentNote) return; // 新建未保存：交给手动「保存」，避免自动创建空文件
+  if (editor.value === lastSavedContent) return; // 内容没变化，不重复写文件
   await doSave(currentNote, editor.value);
-  showToast('已保存');
 }
 
-// 防抖：每次输入都重置计时器，停止输入 800ms 后才真正保存
+// 防抖自动保存：每次输入都重置计时器，停止输入 800ms 后静默写盘
 function scheduleAutoSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(autoSave, 800);
+  saveTimer = setTimeout(flushSave, 800);
 }
+
+// 粘贴后立即保存（等粘贴内容写入 textarea 后再读，避免读到旧值）
+editor.addEventListener('paste', () => {
+  setTimeout(flushSave, 0);
+});
+
+// 窗口关闭前，把未保存内容同步写盘（同步 IPC，确保写盘完成再关闭）
+window.addEventListener('beforeunload', () => {
+  if (currentNote && editor.value !== lastSavedContent) {
+    window.notesAPI.flushSync(currentNote, editor.value);
+  }
+});
 
 noteName.addEventListener('input', scheduleAutoSave);
 editor.addEventListener('input', scheduleAutoSave);
+
+// ---- Markdown 实时预览 ----
+let previewTimer = null;
+
+function renderPreview() {
+  const html = marked.parse(editor.value);
+  preview.innerHTML = DOMPurify.sanitize(html);
+}
+
+// 防抖 300ms：停止输入 300ms 后更新预览
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(renderPreview, 300);
+}
+
+editor.addEventListener('input', schedulePreview);
 
 refreshList();

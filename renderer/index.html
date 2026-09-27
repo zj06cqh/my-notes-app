@@ -21,12 +21,17 @@
         <input id="note-name" placeholder="笔记标题（文件名）">
         <button id="save-note">保存</button>
       </div>
-      <textarea id="editor" placeholder="在这里写 Markdown..."></textarea>
+      <div class="editor-body">
+        <textarea id="editor" placeholder="在这里写 Markdown..."></textarea>
+        <div id="preview" class="preview"></div>
+      </div>
     </main>
   </div>
 
   <div id="toast">已保存</div>
 
+  <script src="vendor/marked.umd.js"></script>
+  <script src="vendor/purify.min.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
