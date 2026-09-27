@@ -2,6 +2,9 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// FSRS 间隔重复算法（纯逻辑模块）
+const { createCard, reviewCard, Rating, isDue } = require('./src/fsrs');
+
 // 笔记统一存放目录（相对于项目根目录）
 const NOTES_DIR = path.join(__dirname, 'notes');
 
@@ -36,15 +39,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// ---- frontmatter 元数据解析/写入 ----
-
-// 复习元数据默认值
-const DEFAULT_META = {
-  importance: 0,    // 0 = 未设置，1-5 = 重要程度
-  lastReview: '',   // 上次复习日期 YYYY-MM-DD
-  nextReview: '',   // 下次复习日期 YYYY-MM-DD
-  interval: 1       // 间隔天数
-};
+// ---- frontmatter 元数据解析/写入（importance + FSRS 复习卡片） ----
 
 // 解析文件开头的 YAML frontmatter（--- ... ---），返回 { meta, body }
 function parseFrontmatter(content) {
@@ -67,70 +62,98 @@ function parseFrontmatter(content) {
   return { meta, body: content.slice(m[0].length) };
 }
 
-// 把解析出的原始值规整成正确类型 + 默认值
-function normalizeMeta(meta) {
+// 从 frontmatter 字段重建 FSRS card（没有字段时返回一张新卡，due=现在）
+function metaToCard(meta) {
+  const card = createCard();
+  card.state = parseInt(meta.state, 10) || 0;
+  card.stability = parseFloat(meta.stability) || 0;
+  card.difficulty = parseFloat(meta.difficulty) || 0;
+  card.reps = parseInt(meta.reps, 10) || 0;
+  card.lapses = parseInt(meta.lapses, 10) || 0;
+  card.learning_steps = parseInt(meta.learningSteps, 10) || 0;
+  if (meta.due) card.due = new Date(meta.due);
+  if (meta.lastReview) card.last_review = new Date(meta.lastReview);
+  return card;
+}
+
+// 把 card 序列化成 frontmatter 的字符串字段
+function cardToMeta(card) {
   return {
-    importance: parseInt(meta.importance, 10) || 0,
-    lastReview: meta.lastReview || '',
-    nextReview: meta.nextReview || '',
-    interval: parseInt(meta.interval, 10) || 1
+    state: String(card.state ?? 0),
+    stability: String(card.stability ?? 0),
+    difficulty: String(card.difficulty ?? 0),
+    reps: String(card.reps ?? 0),
+    lapses: String(card.lapses ?? 0),
+    learningSteps: String(card.learning_steps ?? 0),
+    due: card.due instanceof Date ? card.due.toISOString() : String(card.due ?? ''),
+    lastReview: card.last_review instanceof Date ? card.last_review.toISOString() : ''
   };
 }
 
-// 序列化元数据为 frontmatter 文本（结尾带换行）
-function stringifyFrontmatter(meta) {
-  return [
-    '---',
-    `importance: ${meta.importance}`,
-    `lastReview: '${meta.lastReview}'`,
-    `nextReview: '${meta.nextReview}'`,
-    `interval: ${meta.interval}`,
-    '---'
-  ].join('\n') + '\n';
+// 生成 frontmatter 文本（结尾带换行）。复习过（reps>0）才写卡片字段。
+function stringifyFrontmatter(importance, card) {
+  const lines = ['---', `importance: ${importance}`];
+  if (card && card.reps > 0) {
+    const m = cardToMeta(card);
+    lines.push(`state: ${m.state}`);
+    lines.push(`stability: ${m.stability}`);
+    lines.push(`difficulty: ${m.difficulty}`);
+    lines.push(`reps: ${m.reps}`);
+    lines.push(`lapses: ${m.lapses}`);
+    lines.push(`learningSteps: ${m.learningSteps}`);
+    lines.push(`due: '${m.due}'`);
+    if (m.lastReview) lines.push(`lastReview: '${m.lastReview}'`);
+  }
+  lines.push('---');
+  return lines.join('\n') + '\n';
 }
 
-// 读取某篇笔记的元数据（无 frontmatter 时返回默认值）
-function readMeta(filePath) {
-  if (!fs.existsSync(filePath)) return { ...DEFAULT_META };
-  const { meta } = parseFrontmatter(fs.readFileSync(filePath, 'utf-8'));
-  return { ...DEFAULT_META, ...normalizeMeta(meta) };
+// 读取一条笔记：importance + card + body
+function readNote(filePath) {
+  const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+  const { meta, body } = parseFrontmatter(content);
+  return {
+    importance: parseInt(meta.importance, 10) || 0,
+    card: metaToCard(meta),
+    body
+  };
 }
 
-// 列出所有 .md 笔记（含复习元数据）
+// 写一条笔记：frontmatter（importance + card）+ 正文
+function writeNote(filePath, importance, card, content) {
+  fs.writeFileSync(filePath, stringifyFrontmatter(importance, card) + content, 'utf-8');
+}
+
+// ---- IPC ----
+
+// 列出所有 .md 笔记（名称 + 重要程度）
 ipcMain.handle('notes:list', () => {
   return fs.readdirSync(NOTES_DIR)
     .filter((f) => f.endsWith('.md'))
     .map((f) => {
       const name = f.replace(/\.md$/, '');
-      return { name, ...readMeta(path.join(NOTES_DIR, f)) };
+      const { importance } = readNote(path.join(NOTES_DIR, f));
+      return { name, importance };
     });
 });
 
-// 读取笔记正文（剥离 frontmatter 元数据）
+// 读取笔记正文（剥离 frontmatter）
 ipcMain.handle('notes:read', (_e, name) => {
-  const filePath = path.join(NOTES_DIR, `${name}.md`);
+  const filePath = path.join(NOTES_DIR, `${String(name).trim()}.md`);
   if (!fs.existsSync(filePath)) return '';
-  const { body } = parseFrontmatter(fs.readFileSync(filePath, 'utf-8'));
-  return body;
+  return readNote(filePath).body;
 });
 
-// 写正文：保留已有 frontmatter 元数据，不破坏正文（notes:save / notes:flush 共用）
-function writeNoteBody(filePath, content) {
-  const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
-  const { meta } = parseFrontmatter(existing);
-  const merged = { ...DEFAULT_META, ...normalizeMeta(meta) };
-  fs.writeFileSync(filePath, stringifyFrontmatter(merged) + content, 'utf-8');
-}
-
-// 保存笔记正文（保留已有 frontmatter 元数据，不破坏正文）
+// 保存笔记正文（保留 frontmatter 里的 importance 和复习卡片）
 ipcMain.handle('notes:save', (_e, { name, content }) => {
   const safeName = String(name).trim();
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  writeNoteBody(filePath, content);
+  const { importance, card } = readNote(filePath);
+  writeNote(filePath, importance, card, content);
   return safeName;
 });
 
-// 窗口关闭前的兜底保存：同步写盘（renderer 用 sendSync 调用，确保写盘完成再关闭）
+// 窗口关闭前的兜底保存：同步写盘（renderer 用 sendSync 调用）
 ipcMain.on('notes:flush', (e, { name, content }) => {
   const safeName = String(name).trim();
   if (!safeName) {
@@ -138,7 +161,8 @@ ipcMain.on('notes:flush', (e, { name, content }) => {
     return;
   }
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  writeNoteBody(filePath, content);
+  const { importance, card } = readNote(filePath);
+  writeNote(filePath, importance, card, content);
   e.returnValue = true;
 });
 
@@ -152,16 +176,37 @@ ipcMain.handle('notes:delete', (_e, name) => {
   return safeName;
 });
 
-// 设置笔记重要程度（1-5）：只改 frontmatter，不动正文
+// 设置笔记重要程度（1-5）：只改 importance，不动正文和复习卡片
 ipcMain.handle('notes:setImportance', (_e, { name, importance }) => {
   const safeName = String(name).trim();
   const imp = Math.min(5, Math.max(1, parseInt(importance, 10) || 1));
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
+  const { card, body } = readNote(filePath);
+  writeNote(filePath, imp, card, body);
+  return { name: safeName, importance: imp };
+});
 
-  const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
-  const { meta, body } = parseFrontmatter(existing);
-  const merged = { ...DEFAULT_META, ...normalizeMeta(meta), importance: imp };
+// 复习：返回今天到期的笔记（名称 + 正文），按到期时间排序
+ipcMain.handle('notes:due', () => {
+  const due = [];
+  for (const f of fs.readdirSync(NOTES_DIR)) {
+    if (!f.endsWith('.md')) continue;
+    const name = f.replace(/\.md$/, '');
+    const filePath = path.join(NOTES_DIR, f);
+    const { card, body } = readNote(filePath);
+    if (isDue(card)) due.push({ name, content: body, due: card.due });
+  }
+  due.sort((a, b) => new Date(a.due) - new Date(b.due));
+  return due.map(({ name, content }) => ({ name, content }));
+});
 
-  fs.writeFileSync(filePath, stringifyFrontmatter(merged) + body, 'utf-8');
-  return merged;
+// 评分：用 FSRS 更新卡片并写回 frontmatter
+ipcMain.handle('notes:rate', (_e, { name, rating }) => {
+  const safeName = String(name).trim();
+  const r = Math.min(4, Math.max(1, parseInt(rating, 10) || Rating.Good));
+  const filePath = path.join(NOTES_DIR, `${safeName}.md`);
+  const { importance, card, body } = readNote(filePath);
+  const newCard = reviewCard(card, r);
+  writeNote(filePath, importance, newCard, body);
+  return { name: safeName, card: newCard };
 });

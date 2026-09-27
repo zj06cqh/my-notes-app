@@ -11,7 +11,10 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h1>我的笔记</h1>
-        <button id="new-note">新建</button>
+        <div class="sidebar-actions">
+          <button id="start-review">开始复习</button>
+          <button id="new-note">新建</button>
+        </div>
       </div>
       <ul id="note-list"></ul>
     </aside>
@@ -26,6 +29,23 @@
         <div id="preview" class="preview"></div>
       </div>
     </main>
+  </div>
+
+  <div id="review-mode" class="review-mode hidden">
+    <div class="review-header">
+      <span id="review-progress"></span>
+      <button id="review-exit">退出复习</button>
+    </div>
+    <div class="review-card">
+      <h2 id="review-title"></h2>
+      <div id="review-content" class="preview"></div>
+    </div>
+    <div class="review-actions">
+      <button class="rating rating-again" data-rating="1">Again</button>
+      <button class="rating rating-hard" data-rating="2">Hard</button>
+      <button class="rating rating-good" data-rating="3">Good</button>
+      <button class="rating rating-easy" data-rating="4">Easy</button>
+    </div>
   </div>
 
   <div id="toast">已保存</div>

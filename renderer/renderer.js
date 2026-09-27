@@ -4,6 +4,12 @@ const editor = document.getElementById('editor');
 const preview = document.getElementById('preview');
 const newBtn = document.getElementById('new-note');
 const saveBtn = document.getElementById('save-note');
+const startReviewBtn = document.getElementById('start-review');
+const reviewMode = document.getElementById('review-mode');
+const reviewExitBtn = document.getElementById('review-exit');
+const reviewProgress = document.getElementById('review-progress');
+const reviewTitle = document.getElementById('review-title');
+const reviewContent = document.getElementById('review-content');
 
 let currentNote = null;      // 当前正在编辑的笔记名（不含扩展名）
 let lastSavedContent = '';   // 当前笔记已写盘的内容，用于判断是否有变化
@@ -172,5 +178,54 @@ function schedulePreview() {
 }
 
 editor.addEventListener('input', schedulePreview);
+
+// ---- 复习模式 ----
+let reviewQueue = [];   // 待复习笔记 [{ name, content }]
+let reviewIndex = 0;
+
+async function startReview() {
+  await flushSave(); // 进入复习前先保存当前笔记
+  const due = await window.notesAPI.getDue();
+  if (due.length === 0) {
+    showToast('今天没有需要复习的笔记', 1500);
+    return;
+  }
+  reviewQueue = due;
+  reviewIndex = 0;
+  reviewMode.classList.remove('hidden');
+  showReviewCard();
+}
+
+function showReviewCard() {
+  if (reviewIndex >= reviewQueue.length) {
+    reviewTitle.textContent = '';
+    reviewProgress.textContent = '';
+    reviewContent.innerHTML = '<p>今日复习完成 🎉</p>';
+    return;
+  }
+  const item = reviewQueue[reviewIndex];
+  reviewTitle.textContent = item.name;
+  reviewContent.innerHTML = DOMPurify.sanitize(marked.parse(item.content));
+  reviewProgress.textContent = `第 ${reviewIndex + 1} / ${reviewQueue.length} 条`;
+}
+
+async function rateAndNext(rating) {
+  if (reviewIndex >= reviewQueue.length) return;
+  const item = reviewQueue[reviewIndex];
+  await window.notesAPI.rate(item.name, rating);
+  reviewIndex++;
+  showReviewCard();
+}
+
+function exitReview() {
+  reviewMode.classList.add('hidden');
+  refreshList();
+}
+
+startReviewBtn.addEventListener('click', startReview);
+reviewExitBtn.addEventListener('click', exitReview);
+document.querySelectorAll('.rating').forEach((btn) => {
+  btn.addEventListener('click', () => rateAndNext(parseInt(btn.dataset.rating, 10)));
+});
 
 refreshList();

@@ -248,3 +248,73 @@ button:hover {
 #toast.show {
   opacity: 1;
 }
+
+/* 侧栏头部按钮组 */
+.sidebar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 复习模式 */
+.review-mode {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+.review-mode.hidden {
+  display: none;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid #ddd;
+  color: #666;
+  font-size: 13px;
+}
+
+.review-card {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+.review-card h2 {
+  margin-bottom: 16px;
+  font-size: 20px;
+}
+#review-content.preview {
+  padding: 0;
+  overflow: visible;
+}
+
+.review-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 32px;
+  border-top: 1px solid #ddd;
+}
+
+.rating {
+  flex: 1;
+  max-width: 180px;
+  padding: 12px 0;
+  font-size: 15px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+.rating:hover {
+  filter: brightness(0.9);
+}
+
+/* 双类选择器提升优先级，避免被通用 button:hover 的灰色覆盖 */
+.rating.rating-again { background: #e53935; }
+.rating.rating-hard  { background: #fb8c00; }
+.rating.rating-good  { background: #43a047; }
+.rating.rating-easy  { background: #1e88e5; }

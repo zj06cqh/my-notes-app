@@ -7,5 +7,7 @@ contextBridge.exposeInMainWorld('notesAPI', {
   save: (name, content) => ipcRenderer.invoke('notes:save', { name, content }),
   remove: (name) => ipcRenderer.invoke('notes:delete', name),
   setImportance: (name, importance) => ipcRenderer.invoke('notes:setImportance', { name, importance }),
+  getDue: () => ipcRenderer.invoke('notes:due'),
+  rate: (name, rating) => ipcRenderer.invoke('notes:rate', { name, rating }),
   flushSync: (name, content) => ipcRenderer.sendSync('notes:flush', { name, content })
 });
