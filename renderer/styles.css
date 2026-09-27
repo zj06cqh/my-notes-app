@@ -44,16 +44,41 @@ body {
 }
 
 #note-list li {
+  display: flex;
+  align-items: center;
   padding: 10px 12px;
   cursor: pointer;
   border-bottom: 1px solid #eee;
+}
+
+#note-list li:hover {
+  background: #eaeaea;
+}
+
+.note-title {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#note-list li:hover {
-  background: #eaeaea;
+.note-delete {
+  margin-left: 8px;
+  padding: 0 5px;
+  min-width: 20px;
+  line-height: 18px;
+  font-size: 14px;
+  border: none;
+  background: transparent;
+  color: #bbb;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.note-delete:hover {
+  color: #c0392b;
+  background: #f5dcdc;
 }
 
 /* 右侧编辑区 */
@@ -100,4 +125,26 @@ button {
 
 button:hover {
   background: #f0f0f0;
+}
+
+/* 自动保存提示 */
+#toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 13px;
+  border-radius: 4px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+  z-index: 999;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateY(0);
 }

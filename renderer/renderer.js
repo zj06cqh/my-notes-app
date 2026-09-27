@@ -13,7 +13,22 @@ async function refreshList() {
 
   notes.forEach((name) => {
     const li = document.createElement('li');
-    li.textContent = name;
+
+    const title = document.createElement('span');
+    title.className = 'note-title';
+    title.textContent = name;
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'note-delete';
+    delBtn.textContent = '×';
+    delBtn.title = '删除笔记';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteNote(name);
+    });
+
+    li.appendChild(title);
+    li.appendChild(delBtn);
     li.addEventListener('click', () => openNote(name));
     noteList.appendChild(li);
   });
@@ -26,12 +41,34 @@ async function openNote(name) {
   editor.value = await window.notesAPI.read(name);
 }
 
-// 保存当前笔记
+// 保存核心逻辑：写文件并刷新列表（手动保存与自动保存共用）
+async function doSave(name, content) {
+  currentNote = await window.notesAPI.save(name, content);
+  await refreshList();
+}
+
+// 手动保存：以标题框内容作为文件名（新建或改名）
 async function saveNote() {
   const name = noteName.value.trim();
   if (!name) return;
 
-  currentNote = await window.notesAPI.save(name, editor.value);
+  await doSave(name, editor.value);
+}
+
+// 删除某篇笔记（带确认，防误删）
+async function deleteNote(name) {
+  const ok = window.confirm(`确定删除「${name}」吗？删除后无法恢复。`);
+  if (!ok) return;
+
+  await window.notesAPI.remove(name);
+
+  // 如果删除的是当前正在编辑的笔记，清空编辑区
+  if (currentNote === name) {
+    currentNote = null;
+    noteName.value = '';
+    editor.value = '';
+  }
+
   await refreshList();
 }
 
@@ -51,5 +88,34 @@ document.addEventListener('keydown', (e) => {
     saveNote();
   }
 });
+
+// ---- 自动保存 ----
+const toast = document.getElementById('toast');
+let saveTimer = null;
+let toastTimer = null;
+
+// 右上角轻提示
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+// 自动保存：仅对已保存过的笔记生效，只保存内容、不涉及改名
+async function autoSave() {
+  if (!currentNote) return; // 新建未保存：交给手动「保存」，避免自动创建空文件
+  await doSave(currentNote, editor.value);
+  showToast('已保存');
+}
+
+// 防抖：每次输入都重置计时器，停止输入 800ms 后才真正保存
+function scheduleAutoSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(autoSave, 800);
+}
+
+noteName.addEventListener('input', scheduleAutoSave);
+editor.addEventListener('input', scheduleAutoSave);
 
 refreshList();
