@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(corepack --version)",
+      "Bash(corepack enable *)",
+      "Bash(/d/node/node.exe --version)",
+      "Read(//d/node_modules/**)",
+      "Bash(/d/node/npm.cmd --version)",
+      "Bash(/d/node/node.exe *)",
+      "Bash(cmd.exe /c \"node --version\")",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(cmd.exe /c \"echo %PATH%\")"
+    ]
+  }
+}

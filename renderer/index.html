@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
+  <title>我的笔记</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>我的笔记</h1>
+        <button id="new-note">新建</button>
+      </div>
+      <ul id="note-list"></ul>
+    </aside>
+
+    <main class="editor">
+      <div class="editor-header">
+        <input id="note-name" placeholder="笔记标题（文件名）">
+        <button id="save-note">保存</button>
+      </div>
+      <textarea id="editor" placeholder="在这里写 Markdown..."></textarea>
+    </main>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
