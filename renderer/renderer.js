@@ -10,6 +10,13 @@ const reviewExitBtn = document.getElementById('review-exit');
 const reviewProgress = document.getElementById('review-progress');
 const reviewTitle = document.getElementById('review-title');
 const reviewContent = document.getElementById('review-content');
+const reviewAi = document.getElementById('review-ai');
+const reviewAiLoading = document.getElementById('review-ai-loading');
+const reviewAiBody = document.getElementById('review-ai-body');
+const reviewSummary = document.getElementById('review-summary');
+const reviewQuestion = document.getElementById('review-question');
+const reviewToggle = document.getElementById('review-toggle');
+const reviewDone = document.getElementById('review-done');
 
 let currentNote = null;      // 当前正在编辑的笔记名（不含扩展名）
 let lastSavedContent = '';   // 当前笔记已写盘的内容，用于判断是否有变化
@@ -182,6 +189,7 @@ editor.addEventListener('input', schedulePreview);
 // ---- 复习模式 ----
 let reviewQueue = [];   // 待复习笔记 [{ name, content }]
 let reviewIndex = 0;
+let reviewToken = 0;    // 每次展示递增，用于丢弃过期的异步 AI 结果
 
 async function startReview() {
   await flushSave(); // 进入复习前先保存当前笔记
@@ -197,16 +205,52 @@ async function startReview() {
 }
 
 function showReviewCard() {
+  const token = ++reviewToken; // 本次展示的标记
+
+  // 全部复习完：显示完成态
   if (reviewIndex >= reviewQueue.length) {
     reviewTitle.textContent = '';
     reviewProgress.textContent = '';
-    reviewContent.innerHTML = '<p>今日复习完成 🎉</p>';
+    reviewDone.textContent = '今日复习完成 🎉';
+    reviewDone.classList.remove('hidden');
+    reviewAi.classList.add('hidden');
+    reviewToggle.classList.add('hidden');
+    reviewContent.classList.add('hidden');
     return;
   }
+
   const item = reviewQueue[reviewIndex];
   reviewTitle.textContent = item.name;
-  reviewContent.innerHTML = DOMPurify.sanitize(marked.parse(item.content));
   reviewProgress.textContent = `第 ${reviewIndex + 1} / ${reviewQueue.length} 条`;
+  reviewDone.classList.add('hidden');
+
+  // 原文先渲染好但默认收起，点“查看原文”再展开
+  reviewContent.innerHTML = DOMPurify.sanitize(marked.parse(item.content));
+  reviewContent.classList.add('hidden');
+  reviewToggle.textContent = '查看原文';
+  reviewToggle.classList.add('hidden');
+
+  // AI 加载态
+  reviewAi.classList.remove('hidden');
+  reviewAiLoading.classList.remove('hidden');
+  reviewAiBody.classList.add('hidden');
+  reviewSummary.textContent = '';
+  reviewQuestion.textContent = '';
+
+  // 异步生成 AI 总结 + 问题；失败则跳过 AI、直接展开原文，绝不影响评分
+  window.notesAPI.getAI(item.name).then((res) => {
+    if (token !== reviewToken) return; // 已切到下一张卡，丢弃过期结果
+    if (!res || res.error) throw new Error(res && res.error ? res.error : 'AI 调用失败');
+    reviewSummary.textContent = res.summary || '';
+    reviewQuestion.textContent = res.question || '';
+    reviewAiLoading.classList.add('hidden');
+    reviewAiBody.classList.remove('hidden');
+    reviewToggle.classList.remove('hidden'); // 显示“查看原文”
+  }).catch(() => {
+    if (token !== reviewToken) return;
+    reviewAi.classList.add('hidden');        // 跳过 AI 部分
+    reviewContent.classList.remove('hidden'); // 直接显示原文
+  });
 }
 
 async function rateAndNext(rating) {
@@ -221,6 +265,12 @@ function exitReview() {
   reviewMode.classList.add('hidden');
   refreshList();
 }
+
+// 查看 / 收起原文
+reviewToggle.addEventListener('click', () => {
+  const hidden = reviewContent.classList.toggle('hidden');
+  reviewToggle.textContent = hidden ? '查看原文' : '收起原文';
+});
 
 startReviewBtn.addEventListener('click', startReview);
 reviewExitBtn.addEventListener('click', exitReview);

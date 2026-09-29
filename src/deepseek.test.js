@@ -1,5 +1,6 @@
-// DeepSeek API 终端测试：读取 notes/ 里第一条真实笔记，调用一次，打印 summary / question。
-// 运行：node src/deepseek.test.js
+// DeepSeek API 终端测试：读取 notes/ 里一条真实笔记，调用一次，打印 summary / question。
+// 运行：node src/deepseek.test.js [笔记名]
+//   不传笔记名 → 读第 1 条；传参 → 读指定笔记（可带或不带 .md 后缀）。
 // 前提：项目根目录有 .env，且填了真实的 DEEPSEEK_API_KEY。
 
 const fs = require('fs');
@@ -24,12 +25,27 @@ async function main() {
     process.exit(1);
   }
 
-  const file = files[0];
+  // 命令行可指定笔记名（可带或不带 .md 后缀）；不传则取第 1 条
+  const arg = process.argv[2];
+  let file;
+  if (arg) {
+    const target = arg.trim().replace(/\.md$/, '');
+    file = files.find((f) => f.replace(/\.md$/, '') === target);
+    if (!file) {
+      console.error(
+        `notes/ 下找不到「${arg}」。现有笔记：\n  ` +
+          files.map((f) => f.replace(/\.md$/, '')).join('\n  ')
+      );
+      process.exit(1);
+    }
+  } else {
+    file = files[0];
+  }
   const name = file.replace(/\.md$/, '');
   const content = fs.readFileSync(path.join(NOTES_DIR, file), 'utf-8');
   const body = stripFrontmatter(content);
 
-  console.log(`测试笔记：${name}（notes/ 共 ${files.length} 条，取第 1 条）\n`);
+  console.log(`测试笔记：${name}（notes/ 共 ${files.length} 条${arg ? '，命令行指定' : '，取第 1 条'}）\n`);
   console.log('调用 DeepSeek ...\n');
 
   const { summary, question, usage } = await generate(name, body);

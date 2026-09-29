@@ -5,6 +5,9 @@ const fs = require('fs');
 // FSRS 间隔重复算法（纯逻辑模块）
 const { createCard, reviewCard, Rating, isDue } = require('./src/fsrs');
 
+// DeepSeek API 封装（复习 AI 辅助）
+const { generate } = require('./src/deepseek');
+
 // 笔记统一存放目录（相对于项目根目录）
 const NOTES_DIR = path.join(__dirname, 'notes');
 
@@ -209,4 +212,20 @@ ipcMain.handle('notes:rate', (_e, { name, rating }) => {
   const newCard = reviewCard(card, r);
   writeNote(filePath, importance, newCard, body);
   return { name: safeName, card: newCard };
+});
+
+// 复习 AI 辅助：调用 DeepSeek 生成总结 + 问题。失败时返回 { error }，由渲染层降级为直接显示原文。
+ipcMain.handle('notes:ai', async (_e, name) => {
+  const safeName = String(name).trim();
+  const filePath = path.join(NOTES_DIR, `${safeName}.md`);
+  if (!fs.existsSync(filePath)) {
+    return { error: '笔记不存在' };
+  }
+  const { body } = readNote(filePath);
+  try {
+    const { summary, question } = await generate(safeName, body);
+    return { summary, question };
+  } catch (e) {
+    return { error: e.message || 'AI 调用失败' };
+  }
 });

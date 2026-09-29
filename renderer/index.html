@@ -38,7 +38,22 @@
     </div>
     <div class="review-card">
       <h2 id="review-title"></h2>
-      <div id="review-content" class="preview"></div>
+      <div id="review-done" class="review-done hidden"></div>
+      <div id="review-ai" class="review-ai hidden">
+        <div id="review-ai-loading" class="review-ai-loading">AI 正在生成...</div>
+        <div id="review-ai-body" class="review-ai-body hidden">
+          <div class="review-ai-row">
+            <span class="review-ai-label">总结</span>
+            <p id="review-summary"></p>
+          </div>
+          <div class="review-ai-row review-ai-question">
+            <span class="review-ai-label">问题</span>
+            <p id="review-question"></p>
+          </div>
+        </div>
+      </div>
+      <button id="review-toggle" class="review-toggle hidden">查看原文</button>
+      <div id="review-content" class="preview hidden"></div>
     </div>
     <div class="review-actions">
       <button class="rating rating-again" data-rating="1">Again</button>
