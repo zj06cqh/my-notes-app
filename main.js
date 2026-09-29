@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -22,6 +22,36 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
+// 桌面宠物泡泡窗口（独立透明窗口，与笔记主窗口并存）
+function createPetWindow() {
+  const size = 200;
+  const petWin = new BrowserWindow({
+    width: size,
+    height: size,
+    transparent: true,
+    backgroundColor: '#00000000', // 避免加载前出现白/黑底闪烁
+    frame: false,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false, // 关掉原生阴影，泡泡阴影用 CSS 做
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  // 默认出现在主屏幕右下角（避开任务栏，留 20px 边距）
+  const { workArea } = screen.getPrimaryDisplay();
+  const margin = 20;
+  petWin.setPosition(
+    workArea.x + workArea.width - size - margin,
+    workArea.y + workArea.height - size - margin
+  );
+
+  petWin.loadFile(path.join(__dirname, 'renderer', 'pet.html'));
+}
+
 app.whenReady().then(() => {
   // 确保笔记目录存在
   if (!fs.existsSync(NOTES_DIR)) {
@@ -29,6 +59,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  createPetWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
