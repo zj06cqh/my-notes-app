@@ -7,8 +7,8 @@ contextBridge.exposeInMainWorld('notesAPI', {
   save: (name, content) => ipcRenderer.invoke('notes:save', { name, content }),
   remove: (name) => ipcRenderer.invoke('notes:delete', name),
   setImportance: (name, importance) => ipcRenderer.invoke('notes:setImportance', { name, importance }),
-  getDue: () => ipcRenderer.invoke('notes:due'),
-  rate: (name, rating) => ipcRenderer.invoke('notes:rate', { name, rating }),
-  getAI: (name) => ipcRenderer.invoke('notes:ai', name),
-  flushSync: (name, content) => ipcRenderer.sendSync('notes:flush', { name, content })
+  flushSync: (name, content) => ipcRenderer.sendSync('notes:flush', { name, content }),
+  ocrImage: (dataUrl) => ipcRenderer.invoke('ocr:image', dataUrl),
+  readClipboardImage: () => ipcRenderer.invoke('clipboard:image'),
+  onOcrProgress: (cb) => ipcRenderer.on('ocr:progress', (_e, payload) => cb(payload))
 });

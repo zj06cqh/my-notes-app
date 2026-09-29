@@ -12,7 +12,6 @@
       <div class="sidebar-header">
         <h1>我的笔记</h1>
         <div class="sidebar-actions">
-          <button id="start-review">开始复习</button>
           <button id="new-note">新建</button>
         </div>
       </div>
@@ -23,44 +22,15 @@
       <div class="editor-header">
         <input id="note-name" placeholder="笔记标题（文件名）">
         <button id="save-note">保存</button>
+        <button id="ocr-file">插入图片并识别</button>
+        <button id="ocr-clipboard">从剪贴板识别</button>
       </div>
+      <input type="file" id="ocr-file-input" accept="image/png,image/jpeg" hidden>
       <div class="editor-body">
         <textarea id="editor" placeholder="在这里写 Markdown..."></textarea>
         <div id="preview" class="preview"></div>
       </div>
     </main>
-  </div>
-
-  <div id="review-mode" class="review-mode hidden">
-    <div class="review-header">
-      <span id="review-progress"></span>
-      <button id="review-exit">退出复习</button>
-    </div>
-    <div class="review-card">
-      <h2 id="review-title"></h2>
-      <div id="review-done" class="review-done hidden"></div>
-      <div id="review-ai" class="review-ai hidden">
-        <div id="review-ai-loading" class="review-ai-loading">AI 正在生成...</div>
-        <div id="review-ai-body" class="review-ai-body hidden">
-          <div class="review-ai-row">
-            <span class="review-ai-label">总结</span>
-            <p id="review-summary"></p>
-          </div>
-          <div class="review-ai-row review-ai-question">
-            <span class="review-ai-label">问题</span>
-            <p id="review-question"></p>
-          </div>
-        </div>
-      </div>
-      <button id="review-toggle" class="review-toggle hidden">查看原文</button>
-      <div id="review-content" class="preview hidden"></div>
-    </div>
-    <div class="review-actions">
-      <button class="rating rating-again" data-rating="1">Again</button>
-      <button class="rating rating-hard" data-rating="2">Hard</button>
-      <button class="rating rating-good" data-rating="3">Good</button>
-      <button class="rating rating-easy" data-rating="4">Easy</button>
-    </div>
   </div>
 
   <div id="toast">已保存</div>

@@ -1,12 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// FSRS 间隔重复算法（纯逻辑模块）
-const { createCard, reviewCard, Rating, isDue } = require('./src/fsrs');
-
-// DeepSeek API 封装（复习 AI 辅助）
-const { generate } = require('./src/deepseek');
+// 图片识别（OCR，tesseract.js）
+const { createWorker, OEM } = require('tesseract.js');
 
 // 笔记统一存放目录（相对于项目根目录）
 const NOTES_DIR = path.join(__dirname, 'notes');
@@ -42,7 +39,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// ---- frontmatter 元数据解析/写入（importance + FSRS 复习卡片） ----
+// ---- frontmatter 元数据解析/写入（仅 importance） ----
 
 // 解析文件开头的 YAML frontmatter（--- ... ---），返回 { meta, body }
 function parseFrontmatter(content) {
@@ -65,66 +62,24 @@ function parseFrontmatter(content) {
   return { meta, body: content.slice(m[0].length) };
 }
 
-// 从 frontmatter 字段重建 FSRS card（没有字段时返回一张新卡，due=现在）
-function metaToCard(meta) {
-  const card = createCard();
-  card.state = parseInt(meta.state, 10) || 0;
-  card.stability = parseFloat(meta.stability) || 0;
-  card.difficulty = parseFloat(meta.difficulty) || 0;
-  card.reps = parseInt(meta.reps, 10) || 0;
-  card.lapses = parseInt(meta.lapses, 10) || 0;
-  card.learning_steps = parseInt(meta.learningSteps, 10) || 0;
-  if (meta.due) card.due = new Date(meta.due);
-  if (meta.lastReview) card.last_review = new Date(meta.lastReview);
-  return card;
+// 生成 frontmatter 文本（仅 importance）
+function stringifyFrontmatter(importance) {
+  return `---\nimportance: ${importance}\n---\n`;
 }
 
-// 把 card 序列化成 frontmatter 的字符串字段
-function cardToMeta(card) {
-  return {
-    state: String(card.state ?? 0),
-    stability: String(card.stability ?? 0),
-    difficulty: String(card.difficulty ?? 0),
-    reps: String(card.reps ?? 0),
-    lapses: String(card.lapses ?? 0),
-    learningSteps: String(card.learning_steps ?? 0),
-    due: card.due instanceof Date ? card.due.toISOString() : String(card.due ?? ''),
-    lastReview: card.last_review instanceof Date ? card.last_review.toISOString() : ''
-  };
-}
-
-// 生成 frontmatter 文本（结尾带换行）。复习过（reps>0）才写卡片字段。
-function stringifyFrontmatter(importance, card) {
-  const lines = ['---', `importance: ${importance}`];
-  if (card && card.reps > 0) {
-    const m = cardToMeta(card);
-    lines.push(`state: ${m.state}`);
-    lines.push(`stability: ${m.stability}`);
-    lines.push(`difficulty: ${m.difficulty}`);
-    lines.push(`reps: ${m.reps}`);
-    lines.push(`lapses: ${m.lapses}`);
-    lines.push(`learningSteps: ${m.learningSteps}`);
-    lines.push(`due: '${m.due}'`);
-    if (m.lastReview) lines.push(`lastReview: '${m.lastReview}'`);
-  }
-  lines.push('---');
-  return lines.join('\n') + '\n';
-}
-
-// 读取一条笔记：importance + card + body
+// 读取一条笔记：importance + body
 function readNote(filePath) {
   const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
   const { meta, body } = parseFrontmatter(content);
   return {
     importance: parseInt(meta.importance, 10) || 0,
-    card: metaToCard(meta),
     body
   };
 }
 
-// 写一条笔记：frontmatter（importance + card）+ 正文
-function writeNote(filePath, importance, card, content) {
-  fs.writeFileSync(filePath, stringifyFrontmatter(importance, card) + content, 'utf-8');
+// 写一条笔记：frontmatter（importance）+ 正文
+function writeNote(filePath, importance, content) {
+  fs.writeFileSync(filePath, stringifyFrontmatter(importance) + content, 'utf-8');
 }
 
 // ---- IPC ----
@@ -147,12 +102,12 @@ ipcMain.handle('notes:read', (_e, name) => {
   return readNote(filePath).body;
 });
 
-// 保存笔记正文（保留 frontmatter 里的 importance 和复习卡片）
+// 保存笔记正文（保留 frontmatter 里的 importance）
 ipcMain.handle('notes:save', (_e, { name, content }) => {
   const safeName = String(name).trim();
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  const { importance, card } = readNote(filePath);
-  writeNote(filePath, importance, card, content);
+  const { importance } = readNote(filePath);
+  writeNote(filePath, importance, content);
   return safeName;
 });
 
@@ -164,8 +119,8 @@ ipcMain.on('notes:flush', (e, { name, content }) => {
     return;
   }
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  const { importance, card } = readNote(filePath);
-  writeNote(filePath, importance, card, content);
+  const { importance } = readNote(filePath);
+  writeNote(filePath, importance, content);
   e.returnValue = true;
 });
 
@@ -179,53 +134,57 @@ ipcMain.handle('notes:delete', (_e, name) => {
   return safeName;
 });
 
-// 设置笔记重要程度（1-5）：只改 importance，不动正文和复习卡片
+// 设置笔记重要程度（1-5）：只改 importance，不动正文
 ipcMain.handle('notes:setImportance', (_e, { name, importance }) => {
   const safeName = String(name).trim();
   const imp = Math.min(5, Math.max(1, parseInt(importance, 10) || 1));
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  const { card, body } = readNote(filePath);
-  writeNote(filePath, imp, card, body);
+  const { body } = readNote(filePath);
+  writeNote(filePath, imp, body);
   return { name: safeName, importance: imp };
 });
 
-// 复习：返回今天到期的笔记（名称 + 正文），按到期时间排序
-ipcMain.handle('notes:due', () => {
-  const due = [];
-  for (const f of fs.readdirSync(NOTES_DIR)) {
-    if (!f.endsWith('.md')) continue;
-    const name = f.replace(/\.md$/, '');
-    const filePath = path.join(NOTES_DIR, f);
-    const { card, body } = readNote(filePath);
-    if (isDue(card)) due.push({ name, content: body, due: card.due });
+// ---- 图片识别（OCR） ----
+
+let ocrWorkerPromise = null; // 复用 worker 的 Promise，避免并发时重复创建
+let ocrSender = null;        // 当前发起识别请求的窗口，用于回传进度
+
+// 懒加载 worker：首次识别时创建（含语言包下载），之后复用
+async function getOcrWorker() {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = createWorker('chi_sim+eng', OEM.LSTM_ONLY, {
+      cachePath: path.join(app.getPath('userData'), 'tesseract-cache'),
+      logger: (m) => {
+        if (ocrSender && !ocrSender.isDestroyed()) {
+          ocrSender.send('ocr:progress', { status: m.status, progress: m.progress });
+        }
+      }
+    }).catch((err) => {
+      ocrWorkerPromise = null; // 失败后允许下次重试
+      throw err;
+    });
   }
-  due.sort((a, b) => new Date(a.due) - new Date(b.due));
-  return due.map(({ name, content }) => ({ name, content }));
+  return ocrWorkerPromise;
+}
+
+// 读取剪贴板里的图片，返回 dataURL（没有图片则返回空串）
+ipcMain.handle('clipboard:image', () => {
+  const img = clipboard.readImage();
+  return img.isEmpty() ? '' : img.toDataURL();
 });
 
-// 评分：用 FSRS 更新卡片并写回 frontmatter
-ipcMain.handle('notes:rate', (_e, { name, rating }) => {
-  const safeName = String(name).trim();
-  const r = Math.min(4, Math.max(1, parseInt(rating, 10) || Rating.Good));
-  const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  const { importance, card, body } = readNote(filePath);
-  const newCard = reviewCard(card, r);
-  writeNote(filePath, importance, newCard, body);
-  return { name: safeName, card: newCard };
-});
-
-// 复习 AI 辅助：调用 DeepSeek 生成总结 + 问题。失败时返回 { error }，由渲染层降级为直接显示原文。
-ipcMain.handle('notes:ai', async (_e, name) => {
-  const safeName = String(name).trim();
-  const filePath = path.join(NOTES_DIR, `${safeName}.md`);
-  if (!fs.existsSync(filePath)) {
-    return { error: '笔记不存在' };
-  }
-  const { body } = readNote(filePath);
+// OCR：识别 dataURL 里的图片，返回 { text } 或 { error }
+ipcMain.handle('ocr:image', async (e, dataUrl) => {
+  ocrSender = e.sender;
   try {
-    const { summary, question } = await generate(safeName, body);
-    return { summary, question };
-  } catch (e) {
-    return { error: e.message || 'AI 调用失败' };
+    const str = String(dataUrl);
+    const commaIdx = str.indexOf(',');
+    const base64 = commaIdx >= 0 ? str.slice(commaIdx + 1) : str;
+    const buf = Buffer.from(base64, 'base64');
+    const worker = await getOcrWorker();
+    const { data } = await worker.recognize(buf);
+    return { text: data.text };
+  } catch (err) {
+    return { error: err.message || '识别失败' };
   }
 });
