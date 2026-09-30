@@ -7,10 +7,25 @@
   <link rel="stylesheet" href="pet.css">
 </head>
 <body>
-  <div class="bubble">
+  <!-- 泡泡 = 宠物本体（200×200 槽位，鲸鱼图居中） -->
+  <div class="bubble" id="pet-bubble">
     <!-- 把你的图片命名为 pet.png，放到项目根目录 images/ 文件夹即可替换（支持 png/jpg/svg） -->
     <img id="pet-img" class="pet-img" src="../images/pet.gif" alt="宠物">
   </div>
+
+  <!-- 小气泡容器：保存后生成的小球，代表一条已保存的笔记 -->
+  <div class="bubbles" id="bubbles"></div>
+
+  <!-- 气泡 = 点击泡泡后冒出的输入对话框（CSS 静态隐藏，避免启动时闪现） -->
+  <div class="dialog" id="dialog">
+    <textarea id="dialog-input" placeholder="记点什么…"></textarea>
+    <div class="dialog-actions">
+      <span class="dialog-hint">Ctrl+Enter 保存</span>
+      <button id="dialog-save" class="dialog-save">保存</button>
+    </div>
+  </div>
+
+  <script src="note-store.js"></script>
   <script src="pet.js"></script>
 </body>
 </html>

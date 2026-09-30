@@ -61,7 +61,7 @@ async function openNote(name) {
 
 // 保存核心逻辑：写文件并刷新列表（手动保存与自动保存共用）
 async function doSave(name, content) {
-  currentNote = await window.notesAPI.save(name, content);
+  currentNote = await window.NoteStore.save(name, content);
   lastSavedContent = content; // 记录已写盘内容，供「无变化不重复写」判断
   await refreshList();
 }

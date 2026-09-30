@@ -12,3 +12,14 @@ contextBridge.exposeInMainWorld('notesAPI', {
   readClipboardImage: () => ipcRenderer.invoke('clipboard:image'),
   onOcrProgress: (cb) => ipcRenderer.on('ocr:progress', (_e, payload) => cb(payload))
 });
+
+// 桌面宠物泡泡的拖动接口（通过 IPC 通知主进程移动窗口）
+contextBridge.exposeInMainWorld('petAPI', {
+  dragStart: (screenX, screenY) => ipcRenderer.send('pet:drag-start', { screenX, screenY }),
+  dragMove: (screenX, screenY) => ipcRenderer.send('pet:drag-move', { screenX, screenY }),
+  dragEnd: () => ipcRenderer.send('pet:drag-end'),
+  setContentBox: (box) => ipcRenderer.send('pet:set-content-box', box),
+  getBubbles: () => ipcRenderer.invoke('pet:get-bubbles'),
+  addBubble: (bubble) => ipcRenderer.invoke('pet:add-bubble', bubble),
+  setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore)
+});
