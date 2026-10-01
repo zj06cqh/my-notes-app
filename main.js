@@ -71,6 +71,19 @@ function savePetBubbles() {
   } catch (e) { /* 写盘失败不致命 */ }
 }
 
+// 删除某条笔记对应的小气泡：更新内存 + 写盘 + 通知宠物窗口立即刷新
+function removeBubble(noteName) {
+  const n = String(noteName).trim();
+  const before = petBubbles.length;
+  petBubbles = petBubbles.filter((b) => b.note !== n);
+  if (petBubbles.length !== before) {
+    savePetBubbles();
+    if (petWin && !petWin.isDestroyed()) {
+      petWin.webContents.send('pet:bubbles-changed', petBubbles);
+    }
+  }
+}
+
 // 移动窗口：先查尺寸是否漂移，正常走轻量 setPosition，漂移才用 setBounds 锁回
 function movePetWindow() {
   const { ox, oy, w, h } = petContentBox;
@@ -366,6 +379,7 @@ ipcMain.handle('notes:delete', (_e, name) => {
   const filePath = path.join(NOTES_DIR, `${safeName}.md`);
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
+    removeBubble(safeName); // 同步删掉对应的小气泡，宠物窗口立即消失
   }
   return safeName;
 });

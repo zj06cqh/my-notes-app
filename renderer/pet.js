@@ -275,4 +275,11 @@
     renderBubbles();
     relayout();
   })();
+
+  // 笔记被删除时，主进程推送最新小气泡列表，立即刷新（无需重启）
+  window.petAPI.onBubblesChanged((list) => {
+    bubbles = (list || []).map((b) => ({ note: b.note, x: b.x, y: b.y }));
+    renderBubbles();
+    relayout();
+  });
 })();

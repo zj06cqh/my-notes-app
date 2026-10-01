@@ -21,5 +21,6 @@ contextBridge.exposeInMainWorld('petAPI', {
   setContentBox: (box) => ipcRenderer.send('pet:set-content-box', box),
   getBubbles: () => ipcRenderer.invoke('pet:get-bubbles'),
   addBubble: (bubble) => ipcRenderer.invoke('pet:add-bubble', bubble),
+  onBubblesChanged: (cb) => ipcRenderer.on('pet:bubbles-changed', (_e, list) => cb(list)),
   setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore)
 });
