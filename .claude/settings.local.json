@@ -14,7 +14,8 @@
       "Bash(node --check preload.js)",
       "Bash(node --check renderer/pet.js)",
       "Bash(git check-ignore *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(node --check renderer/renderer.js)"
     ]
   }
 }

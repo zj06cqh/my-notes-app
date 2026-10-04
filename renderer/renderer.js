@@ -1,7 +1,6 @@
 const noteList = document.getElementById('note-list');
 const noteName = document.getElementById('note-name');
 const editor = document.getElementById('editor');
-const preview = document.getElementById('preview');
 const newBtn = document.getElementById('new-note');
 const saveBtn = document.getElementById('save-note');
 const ocrFileBtn = document.getElementById('ocr-file');
@@ -47,6 +46,16 @@ async function refreshList() {
     li.addEventListener('click', () => openNote(note.name));
     noteList.appendChild(li);
   });
+
+  markActive();
+}
+
+// 高亮当前正在编辑的笔记（侧栏 active 态）
+function markActive() {
+  document.querySelectorAll('#note-list li').forEach((li) => {
+    const title = li.querySelector('.note-title');
+    li.classList.toggle('active', !!(title && title.textContent === currentNote));
+  });
 }
 
 // 打开某篇笔记
@@ -56,7 +65,7 @@ async function openNote(name) {
   noteName.value = name;
   editor.value = await window.notesAPI.read(name);
   lastSavedContent = editor.value; // 刚读到的内容即已写盘内容
-  renderPreview();
+  markActive();
 }
 
 // 保存核心逻辑：写文件并刷新列表（手动保存与自动保存共用）
@@ -105,7 +114,7 @@ newBtn.addEventListener('click', async () => {
   noteName.value = '';
   editor.value = '';
   lastSavedContent = '';
-  renderPreview();
+  markActive();
   noteName.focus();
 });
 
@@ -160,22 +169,6 @@ window.addEventListener('beforeunload', () => {
 noteName.addEventListener('input', scheduleAutoSave);
 editor.addEventListener('input', scheduleAutoSave);
 
-// ---- Markdown 实时预览 ----
-let previewTimer = null;
-
-function renderPreview() {
-  const html = marked.parse(editor.value);
-  preview.innerHTML = DOMPurify.sanitize(html);
-}
-
-// 防抖 300ms：停止输入 300ms 后更新预览
-function schedulePreview() {
-  clearTimeout(previewTimer);
-  previewTimer = setTimeout(renderPreview, 300);
-}
-
-editor.addEventListener('input', schedulePreview);
-
 // ---- 图片识别（OCR） ----
 
 // 显示识别进度（复用 #toast，但不自动隐藏）
@@ -198,7 +191,6 @@ function insertAtCursor(text) {
   editor.setSelectionRange(pos, pos);
   editor.focus();
   scheduleAutoSave(); // 触发自动保存
-  schedulePreview();  // 触发预览刷新
 }
 
 // 执行 OCR：dataUrl → 识别文本 → 插入光标处
@@ -256,3 +248,8 @@ ocrClipboardBtn.addEventListener('click', async () => {
 });
 
 refreshList();
+
+// 点击宠物小气泡 → 打开对应笔记到编辑器
+window.notesAPI.onOpenNote((name) => {
+  openNote(name);
+});

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, clipboard, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard, screen, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,8 +8,10 @@ const { createWorker, OEM } = require('tesseract.js');
 // 笔记统一存放目录（相对于项目根目录）
 const NOTES_DIR = path.join(__dirname, 'notes');
 
+let mainWin = null; // 主窗口引用（点击小气泡打开笔记时需要）
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWin = new BrowserWindow({
     width: 1000,
     height: 700,
     webPreferences: {
@@ -19,7 +21,8 @@ function createWindow() {
     }
   });
 
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWin.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWin.on('closed', () => { mainWin = null; });
 }
 
 // ---- 桌面宠物泡泡：拖动才动 + 阻尼滑行 + 边界反弹（性能优化版） ----
@@ -108,6 +111,13 @@ function stopPetTimer() {
   if (petTimer) { clearInterval(petTimer); petTimer = null; }
 }
 
+// 通知渲染进程：泡泡已完全静止（用于重新显示小气泡）
+function notifyPetStopped() {
+  if (petWin && !petWin.isDestroyed()) {
+    petWin.webContents.send('pet:stopped');
+  }
+}
+
 // 单帧推进：阻尼衰减 -> 归零判定 -> 位移 -> 边界反弹 -> 移动窗口
 function petStep() {
   if (petDragging) return;
@@ -121,6 +131,7 @@ function petStep() {
     petState.vx = 0;
     petState.vy = 0;
     stopPetTimer();
+    notifyPetStopped(); // 泡泡静止，重新显示小气泡
     return;
   }
 
@@ -234,6 +245,7 @@ ipcMain.on('pet:drag-end', () => {
   if (Math.abs(petState.vx) < stopThreshold && Math.abs(petState.vy) < stopThreshold) {
     petState.vx = 0;
     petState.vy = 0;
+    notifyPetStopped(); // 松手即静止，重新显示小气泡
     return;
   }
 
@@ -269,7 +281,31 @@ ipcMain.on('pet:set-ignore-mouse', (_e, ignore) => {
   petWin.setIgnoreMouseEvents(!!ignore, { forward: true });
 });
 
+// 点击小气泡 → 打开对应笔记到主窗口编辑器
+function openNoteInMain(name) {
+  if (!mainWin || mainWin.isDestroyed()) {
+    createWindow(); // 主窗口被关过，重建
+  }
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  mainWin.focus();
+  const send = () => mainWin.webContents.send('note:open', name);
+  if (mainWin.webContents.isLoading()) {
+    mainWin.webContents.once('did-finish-load', send);
+  } else {
+    send();
+  }
+}
+
+ipcMain.on('pet:open-note', (_e, note) => {
+  const name = String(note || '').trim();
+  if (name) openNoteInMain(name);
+});
+
 app.whenReady().then(() => {
+  // 隐藏默认菜单栏（File/Edit/View/Window/Help），界面保持极简
+  Menu.setApplicationMenu(null);
+
   // 确保笔记目录存在
   if (!fs.existsSync(NOTES_DIR)) {
     fs.mkdirSync(NOTES_DIR);

@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('notesAPI', {
   flushSync: (name, content) => ipcRenderer.sendSync('notes:flush', { name, content }),
   ocrImage: (dataUrl) => ipcRenderer.invoke('ocr:image', dataUrl),
   readClipboardImage: () => ipcRenderer.invoke('clipboard:image'),
-  onOcrProgress: (cb) => ipcRenderer.on('ocr:progress', (_e, payload) => cb(payload))
+  onOcrProgress: (cb) => ipcRenderer.on('ocr:progress', (_e, payload) => cb(payload)),
+  onOpenNote: (cb) => ipcRenderer.on('note:open', (_e, name) => cb(name))
 });
 
 // 桌面宠物泡泡的拖动接口（通过 IPC 通知主进程移动窗口）
@@ -22,5 +23,7 @@ contextBridge.exposeInMainWorld('petAPI', {
   getBubbles: () => ipcRenderer.invoke('pet:get-bubbles'),
   addBubble: (bubble) => ipcRenderer.invoke('pet:add-bubble', bubble),
   onBubblesChanged: (cb) => ipcRenderer.on('pet:bubbles-changed', (_e, list) => cb(list)),
-  setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore)
+  onPetStopped: (cb) => ipcRenderer.on('pet:stopped', () => cb()),
+  setIgnoreMouse: (ignore) => ipcRenderer.send('pet:set-ignore-mouse', ignore),
+  openNote: (note) => ipcRenderer.send('pet:open-note', note)
 });

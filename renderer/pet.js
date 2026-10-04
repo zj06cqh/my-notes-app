@@ -101,6 +101,9 @@
       el.className = 'mini-bubble';
       el.dataset.note = b.note;
       el.title = b.note;
+      // 随机漂浮周期(2~4s)与相位(负 delay 提前进周期)，避免所有小球同步起伏
+      el.style.animationDuration = (2 + Math.random() * 2).toFixed(2) + 's';
+      el.style.animationDelay = (-Math.random() * 3).toFixed(2) + 's';
       b.el = el;
       bubblesEl.appendChild(el);
     });
@@ -172,7 +175,7 @@
   function onHoverMove(e) {
     if (pressing || dragging) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    const interactive = !!(el && el.closest('.bubble, .dialog'));
+    const interactive = !!(el && el.closest('.bubble, .dialog, .mini-bubble'));
     setIgnore(!interactive);
   }
   window.addEventListener('mousemove', onHoverMove);
@@ -207,6 +210,7 @@
 
     if (!dragging && (Math.abs(effDx) > DRAG_THRESHOLD || Math.abs(effDy) > DRAG_THRESHOLD)) {
       dragging = true;
+      bubblesEl.classList.add('hidden'); // 拖动开始：隐藏全部小气泡
       window.petAPI.dragStart(e.screenX, e.screenY); // 用当前点，grab 偏移才准
     }
     if (dragging) {
@@ -281,5 +285,17 @@
     bubbles = (list || []).map((b) => ({ note: b.note, x: b.x, y: b.y }));
     renderBubbles();
     relayout();
+  });
+
+  // 泡泡完全静止后（滑行归零），重新显示小气泡
+  window.petAPI.onPetStopped(() => {
+    bubblesEl.classList.remove('hidden');
+  });
+
+  // 点击小气泡 → 打开对应笔记（事件委托，靠 data-note 定位）
+  bubblesEl.addEventListener('click', (e) => {
+    const el = e.target.closest('.mini-bubble');
+    if (!el || !el.dataset.note) return;
+    window.petAPI.openNote(el.dataset.note);
   });
 })();

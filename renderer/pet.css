@@ -41,7 +41,17 @@ body {
   overflow: visible;
 }
 
-/* 小气泡：保存后生成的小球，代表一条已保存的笔记 */
+/* 拖动泡泡时隐藏全部小气泡 */
+.bubbles.hidden {
+  display: none;
+}
+
+/* 小气泡：保存后生成的小球，代表一条已保存的笔记；静止时轻微上下漂浮 */
+@keyframes mini-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
 .mini-bubble {
   position: absolute;
   width: 40px;
@@ -52,6 +62,7 @@ body {
     rgba(150, 205, 255, 0.75) 55%,
     rgba(110, 170, 235, 0.5) 100%);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  animation: mini-float 3s ease-in-out infinite; /* 时长/相位由 JS 随机，避免同步 */
 }
 
 /* 气泡：点击泡泡后冒出的输入对话框（淡蓝半透明圆角）
