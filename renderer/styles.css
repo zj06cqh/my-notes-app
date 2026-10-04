@@ -237,19 +237,37 @@ body {
 #editor {
   flex: 1;
   min-width: 0;
-  border: none;
   padding: 24px 28px;
-  font-family: var(--mono);
-  font-size: 14px;
-  line-height: 1.7;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.75;
   color: var(--text);
   background: var(--surface);
-  resize: none;
-  outline: none;
+  overflow-y: auto;
 }
 
-#editor::placeholder {
+#editor .ProseMirror {
+  min-height: 100%;
+  outline: none;
+  word-wrap: break-word;
+}
+
+/* 空内容占位提示（Placeholder 扩展给空段落加 is-editor-empty + data-placeholder） */
+#editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
   color: var(--text-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 富文本里的内联代码 */
+#editor .ProseMirror code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: #f1f3f5;
+  padding: 0.1em 0.4em;
+  border-radius: 5px;
 }
 
 /* ============ 按钮 ============ */

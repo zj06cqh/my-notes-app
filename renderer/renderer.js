@@ -1,6 +1,6 @@
 const noteList = document.getElementById('note-list');
 const noteName = document.getElementById('note-name');
-const editor = document.getElementById('editor');
+const editorEl = document.getElementById('editor');
 const newBtn = document.getElementById('new-note');
 const saveBtn = document.getElementById('save-note');
 const ocrFileBtn = document.getElementById('ocr-file');
@@ -9,6 +9,29 @@ const ocrFileInput = document.getElementById('ocr-file-input');
 
 let currentNote = null;      // 当前正在编辑的笔记名（不含扩展名）
 let lastSavedContent = '';   // 当前笔记已写盘的内容，用于判断是否有变化
+
+// Tiptap 富文本编辑器实例（onUpdate 在正文变化时回调，驱动自动保存）
+const editor = window.createNoteEditor(editorEl, () => scheduleAutoSave());
+
+// HTML 转义
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 纯文本 → HTML：换行转 <br>（供 OCR 插入使用）
+function textToHtml(text) {
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
+// 读取的正文 → 编辑器内容：已是 HTML 原样返回；旧纯文本按行转 <p> 段落
+function bodyToHtml(body) {
+  if (!body) return '<p></p>';
+  if (/<\/?[a-z][^>]*>/i.test(body)) return body;
+  return body.split(/\r?\n/).map((line) => {
+    const t = line.trim();
+    return t ? `<p>${escapeHtml(line)}</p>` : '<p></p>';
+  }).join('');
+}
 
 // 刷新左侧列表
 async function refreshList() {
@@ -63,8 +86,9 @@ async function openNote(name) {
   await flushSave(); // 切换笔记前，先强制保存当前笔记（不等防抖）
   currentNote = name;
   noteName.value = name;
-  editor.value = await window.notesAPI.read(name);
-  lastSavedContent = editor.value; // 刚读到的内容即已写盘内容
+  const raw = await window.notesAPI.read(name);
+  editor.commands.setContent(bodyToHtml(raw));
+  lastSavedContent = editor.getHTML(); // 归一化后的内容作为「已写盘」基准
   markActive();
 }
 
@@ -80,7 +104,7 @@ async function saveNote() {
   const name = noteName.value.trim();
   if (!name) return;
 
-  await doSave(name, editor.value);
+  await doSave(name, editor.getHTML());
 }
 
 // 删除某篇笔记（带确认，防误删）
@@ -94,7 +118,7 @@ async function deleteNote(name) {
   if (currentNote === name) {
     currentNote = null;
     noteName.value = '';
-    editor.value = '';
+    editor.commands.setContent('<p></p>');
   }
 
   await refreshList();
@@ -112,7 +136,7 @@ newBtn.addEventListener('click', async () => {
   await flushSave(); // 新建前先保存当前笔记
   currentNote = null;
   noteName.value = '';
-  editor.value = '';
+  editor.commands.setContent('<p></p>');
   lastSavedContent = '';
   markActive();
   noteName.focus();
@@ -144,8 +168,8 @@ function showToast(msg, duration = 1500) {
 // 有变化才真正写盘；没变化则跳过（自动保存与三处强制保存共用）
 async function flushSave() {
   if (!currentNote) return; // 新建未保存：交给手动「保存」，避免自动创建空文件
-  if (editor.value === lastSavedContent) return; // 内容没变化，不重复写文件
-  await doSave(currentNote, editor.value);
+  if (editor.getHTML() === lastSavedContent) return; // 内容没变化，不重复写文件
+  await doSave(currentNote, editor.getHTML());
 }
 
 // 防抖自动保存：每次输入都重置计时器，停止输入 800ms 后静默写盘
@@ -154,20 +178,14 @@ function scheduleAutoSave() {
   saveTimer = setTimeout(flushSave, 800);
 }
 
-// 粘贴后立即保存（等粘贴内容写入 textarea 后再读，避免读到旧值）
-editor.addEventListener('paste', () => {
-  setTimeout(flushSave, 0);
-});
-
 // 窗口关闭前，把未保存内容同步写盘（同步 IPC，确保写盘完成再关闭）
 window.addEventListener('beforeunload', () => {
-  if (currentNote && editor.value !== lastSavedContent) {
-    window.notesAPI.flushSync(currentNote, editor.value);
+  if (currentNote && editor.getHTML() !== lastSavedContent) {
+    window.notesAPI.flushSync(currentNote, editor.getHTML());
   }
 });
 
 noteName.addEventListener('input', scheduleAutoSave);
-editor.addEventListener('input', scheduleAutoSave);
 
 // ---- 图片识别（OCR） ----
 
@@ -182,14 +200,9 @@ function hideOcrStatus() {
   toast.classList.remove('show');
 }
 
-// 在编辑区当前光标处插入文本
+// 在编辑区当前光标处插入文本（OCR 结果）
 function insertAtCursor(text) {
-  const start = editor.selectionStart;
-  const end = editor.selectionEnd;
-  editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
-  const pos = start + text.length;
-  editor.setSelectionRange(pos, pos);
-  editor.focus();
+  editor.chain().focus().insertContent(textToHtml(text)).run();
   scheduleAutoSave(); // 触发自动保存
 }
 
