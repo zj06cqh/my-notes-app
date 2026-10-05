@@ -14,6 +14,9 @@
   const dialogSave = document.getElementById('dialog-save');
   if (!bubble || !window.petAPI) return;
 
+  // Tiptap 富文本输入框（与主窗口同一套编辑器，粘贴保留颜色）
+  const editor = window.createNoteEditor(dialogInput, { placeholder: '记点什么…' });
+
   // ---- 几何常量（DIP） ----
   const PET = 200;        // 泡泡槽位宽高
   const GAP = 12;         // 泡泡与气泡之间的间距
@@ -133,7 +136,7 @@
 
     dialog.classList.add('open');
     dialogOpen = true;
-    dialogInput.focus();
+    editor.commands.focus();
     relayout();
   }
 
@@ -141,20 +144,13 @@
     if (!dialogOpen) return;
     dialogOpen = false;
     dialog.classList.remove('open');
-    dialogInput.value = '';
-    autogrow(); // 重置 textarea 高度
+    editor.commands.setContent('<p></p>'); // 清空（编辑器自动缩回高度）
     relayout(); // 内容盒变回「泡泡 + 小气泡」
   }
 
   function toggleBubble() {
     if (dialogOpen) collapse();
     else openBubble();
-  }
-
-  // textarea 高度自适应：随内容增长，到上限后内部滚动
-  function autogrow() {
-    dialogInput.style.height = 'auto';
-    dialogInput.style.height = Math.min(dialogInput.scrollHeight, 340) + 'px';
   }
 
   // 气泡尺寸变化（输入撑大）时，同步窗口 bounds
@@ -236,12 +232,12 @@
 
   // ---- 保存：写盘 + 生成小气泡 ----
   async function saveFromBubble() {
-    const text = dialogInput.value.trim();
+    const text = editor.getText().trim();
     if (!text) return;
 
     let note;
     try {
-      note = await window.NoteStore.create(text); // 复用公共模块：按时间生成文件名写盘
+      note = await window.NoteStore.create(editor.getHTML()); // 复用公共模块：按时间生成文件名写盘
     } catch (err) {
       return; // 保存失败保持气泡不收起，方便用户重试/复制内容
     }
@@ -260,7 +256,6 @@
   }
 
   dialogSave.addEventListener('click', saveFromBubble);
-  dialogInput.addEventListener('input', autogrow);
   dialogInput.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();

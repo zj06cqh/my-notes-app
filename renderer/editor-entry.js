@@ -16,16 +16,31 @@ const CodeBlockWithoutVSCodeHandler = CodeBlock.extend({
   }
 });
 
-// 自定义 mark：捕获粘贴进来的 <span style="...">，完整保留 color/background-color 等内联样式
+// 只提取 color，丢弃 background-color / font-family / white-space 等样式。
+// 否则 VSCode 主题的深色背景（如 One Dark 的 rgb(40,44,52)）会被一并保留，
+// 在浅色笔记里渲染成黑块。
+function extractColor(style) {
+  if (!style) return null;
+  for (const decl of style.split(';')) {
+    const i = decl.indexOf(':');
+    if (i === -1) continue;
+    if (decl.slice(0, i).trim().toLowerCase() !== 'color') continue;
+    const val = decl.slice(i + 1).trim();
+    return val || null;
+  }
+  return null;
+}
+
+// 自定义 mark：捕获粘贴进来的 <span style="...">，只保留 color 内联颜色
 const InlineStyle = Mark.create({
   name: 'inlineStyle',
   inclusive: false,
   addAttributes() {
     return {
-      style: {
+      color: {
         default: null,
-        parseHTML: (el) => el.getAttribute('style') || null,
-        renderHTML: (attrs) => (attrs.style ? { style: attrs.style } : {})
+        parseHTML: (el) => extractColor(el.getAttribute('style')),
+        renderHTML: (attrs) => (attrs.color ? { style: `color: ${attrs.color}` } : {})
       }
     };
   },
@@ -37,15 +52,16 @@ const InlineStyle = Mark.create({
   }
 });
 
-// 暴露全局工厂：element 为容器 div，onUpdate 在内容变化时回调（用于自动保存）
-window.createNoteEditor = function (element, onUpdate) {
+// 暴露全局工厂：element 为容器 div；opts.placeholder 为占位文案，opts.onUpdate 在内容变化时回调（用于自动保存）
+window.createNoteEditor = function (element, opts) {
+  const { placeholder = '', onUpdate } = opts || {};
   return new Editor({
     element,
     extensions: [
       StarterKit.configure({ codeBlock: false }),
       CodeBlockWithoutVSCodeHandler,
       InlineStyle,
-      Placeholder.configure({ placeholder: '在这里写 Markdown...' })
+      Placeholder.configure({ placeholder })
     ],
     content: '',
     editorProps: {

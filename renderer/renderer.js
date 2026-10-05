@@ -11,7 +11,10 @@ let currentNote = null;      // 当前正在编辑的笔记名（不含扩展名
 let lastSavedContent = '';   // 当前笔记已写盘的内容，用于判断是否有变化
 
 // Tiptap 富文本编辑器实例（onUpdate 在正文变化时回调，驱动自动保存）
-const editor = window.createNoteEditor(editorEl, () => scheduleAutoSave());
+const editor = window.createNoteEditor(editorEl, {
+  placeholder: '在这里写 Markdown...',
+  onUpdate: () => scheduleAutoSave()
+});
 
 // HTML 转义
 function escapeHtml(s) {

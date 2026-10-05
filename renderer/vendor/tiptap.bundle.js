@@ -18435,15 +18435,26 @@ img.ProseMirror-separator {
       return [];
     }
   });
+  function extractColor(style2) {
+    if (!style2) return null;
+    for (const decl of style2.split(";")) {
+      const i2 = decl.indexOf(":");
+      if (i2 === -1) continue;
+      if (decl.slice(0, i2).trim().toLowerCase() !== "color") continue;
+      const val = decl.slice(i2 + 1).trim();
+      return val || null;
+    }
+    return null;
+  }
   var InlineStyle = Mark2.create({
     name: "inlineStyle",
     inclusive: false,
     addAttributes() {
       return {
-        style: {
+        color: {
           default: null,
-          parseHTML: (el) => el.getAttribute("style") || null,
-          renderHTML: (attrs) => attrs.style ? { style: attrs.style } : {}
+          parseHTML: (el) => extractColor(el.getAttribute("style")),
+          renderHTML: (attrs) => attrs.color ? { style: `color: ${attrs.color}` } : {}
         }
       };
     },
@@ -18454,14 +18465,15 @@ img.ProseMirror-separator {
       return ["span", mergeAttributes(HTMLAttributes), 0];
     }
   });
-  window.createNoteEditor = function(element, onUpdate) {
+  window.createNoteEditor = function(element, opts) {
+    const { placeholder = "", onUpdate } = opts || {};
     return new Editor({
       element,
       extensions: [
         StarterKit.configure({ codeBlock: false }),
         CodeBlockWithoutVSCodeHandler,
         InlineStyle,
-        Placeholder.configure({ placeholder: "\u5728\u8FD9\u91CC\u5199 Markdown..." })
+        Placeholder.configure({ placeholder })
       ],
       content: "",
       editorProps: {

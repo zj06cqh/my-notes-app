@@ -86,17 +86,27 @@ body {
   display: flex;
 }
 
-.dialog textarea {
+#dialog-input {
   width: 100%;
-  min-height: 200px;
   max-height: 340px;       /* 到上限后内部滚动 */
   overflow-y: auto;
-  border: none;
-  outline: none;
-  resize: none;
-  background: transparent;
   font: 14px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif;
   color: #1c2b3a;
+}
+
+#dialog-input .ProseMirror {
+  min-height: 200px;
+  outline: none;
+  word-wrap: break-word;
+}
+
+/* 空内容占位提示 */
+#dialog-input .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgba(60, 90, 120, 0.55);
+  float: left;
+  height: 0;
+  pointer-events: none;
 }
 
 .dialog-actions {
